@@ -54,9 +54,13 @@ function App() {
 
   const createNewNote = () => {
     const timestamp = Date.now();
+    // Pega o número total de notas e soma 1. Pad com zeros à esquerda (4 dígitos).
+    const noteNumber = String(documents.length + 1).padStart(4, "0");
+    const newId = `NoteBan ${noteNumber}`;
+
     const newDoc = {
-      id: `Nova Nota ${timestamp}`,
-      title: `Nova Nota ${timestamp}`,
+      id: newId,
+      title: newId,
       type: "note",
       content: "",
       updatedAt: timestamp,
@@ -67,11 +71,20 @@ function App() {
   };
 
   const updateDocument = (id, updates) => {
-    setDocuments(prev =>
+    setDocuments((prev) =>
       prev.map((doc) =>
         doc.id === id ? { ...doc, ...updates, updatedAt: Date.now() } : doc
       )
     );
+
+    // Só disparamos o salvamento se o documento existir e o título resultante não for vazio
+    const currentDoc = documents.find((d) => d.id === id);
+    if (currentDoc) {
+      const nextDoc = { ...currentDoc, ...updates, updatedAt: Date.now() };
+      if (nextDoc.title.trim() !== "") {
+        saveDoc(id, nextDoc);
+      }
+    }
 
     // Salvamento imediato simplificado (podemos adicionar debounce depois se necessário)
     const docToSave = documents.find(d => d.id === id);
@@ -114,7 +127,9 @@ function App() {
                 <span className="sidebar-item-icon">
                   {doc.type === "note" ? <FileText size={14} /> : <Kanban size={14} />}
                 </span>
-                <span className="sidebar-item-title">{doc.title}</span>
+                <span className="sidebar-item-title">
+                  {doc.title.trim() === "" ? "Sem título" : doc.title}
+                </span>
               </div>
             ))
           )}
