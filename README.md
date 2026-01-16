@@ -31,7 +31,7 @@ A minimalist note-taking app, built with **Tauri 2.0**, **React**, and **Rust**.
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/noteban.git
+git clone https://github.com/Hugofsp93/noteban.git
 cd noteban
 
 # Install dependencies

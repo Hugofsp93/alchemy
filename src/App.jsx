@@ -1,24 +1,169 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Moon, Sun, SquarePen, Trash2, FileText, Kanban } from "lucide-react";
 import "./App.css";
 
 function App() {
   const [documents, setDocuments] = useState([]);
   const [activeDocId, setActiveDocId] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+
+  // Ref para evitar loop de salvamento
+  const savingRef = useRef(false);
+
+  // Sincroniza o atributo data-theme no body
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDarkMode ? "dark" : "light");
+  }, [isDarkMode]);
+
+  const activeDoc = documents.find((doc) => doc.id === activeDocId);
+  const sortedDocs = [...documents].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  // Carrega documentos
+  useEffect(() => {
+    invoke("list_documents")
+      .then((docs) => {
+        setDocuments(docs);
+        if (docs.length > 0 && !activeDocId) {
+          setActiveDocId(docs[0].id);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // Função core de salvamento
+  const saveDoc = async (oldId, doc) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      const newId = await invoke("save_document", { oldId, doc });
+      if (newId !== oldId) {
+        // Se o título mudou, o backend renomeou o arquivo. 
+        // Atualizamos o ID no frontend para manter a sincronia.
+        setDocuments(prev => prev.map(d => d.id === oldId ? { ...d, id: newId } : d));
+        setActiveDocId(newId);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar:", err);
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  const createNewNote = () => {
+    const timestamp = Date.now();
+    const newDoc = {
+      id: `Nova Nota ${timestamp}`,
+      title: `Nova Nota ${timestamp}`,
+      type: "note",
+      content: "",
+      updatedAt: timestamp,
+    };
+    setDocuments([newDoc, ...documents]);
+    setActiveDocId(newDoc.id);
+    saveDoc(newDoc.id, newDoc);
+  };
+
+  const updateDocument = (id, updates) => {
+    setDocuments(prev =>
+      prev.map((doc) =>
+        doc.id === id ? { ...doc, ...updates, updatedAt: Date.now() } : doc
+      )
+    );
+
+    // Salvamento imediato simplificado (podemos adicionar debounce depois se necessário)
+    const docToSave = documents.find(d => d.id === id);
+    if (docToSave) {
+      saveDoc(id, { ...docToSave, ...updates, updatedAt: Date.now() });
+    }
+  };
+
+  const deleteDocument = (id) => {
+    if (window.confirm("Tem certeza que deseja excluir esta nota?")) {
+      invoke("delete_document", { id }).catch(console.error);
+      setDocuments(documents.filter((doc) => doc.id !== id));
+      if (activeDocId === id) {
+        const remaining = documents.filter((doc) => doc.id !== id);
+        setActiveDocId(remaining.length > 0 ? remaining[0].id : null);
+      }
+    }
+  };
 
   return (
     <div className="app-container">
       <aside className="sidebar">
         <header className="sidebar-header">
-          <h1>NoteBan</h1>
+          <div className="sidebar-logo-placeholder">NoteBan</div>
+          <button className="new-note-btn" onClick={createNewNote} title="Nova nota">
+            <SquarePen size={18} />
+          </button>
         </header>
+
         <nav className="sidebar-list">
-          {/* Lista de documentos virá aqui */}
-          <p className="empty-state">Nenhuma nota ainda</p>
+          {sortedDocs.length === 0 ? (
+            <p className="empty-state">Nenhuma nota ainda</p>
+          ) : (
+            sortedDocs.map((doc) => (
+              <div
+                key={doc.id}
+                className={`sidebar-item ${doc.id === activeDocId ? "active" : ""}`}
+                onClick={() => setActiveDocId(doc.id)}
+              >
+                <span className="sidebar-item-icon">
+                  {doc.type === "note" ? <FileText size={14} /> : <Kanban size={14} />}
+                </span>
+                <span className="sidebar-item-title">{doc.title}</span>
+              </div>
+            ))
+          )}
         </nav>
+
+        <footer className="sidebar-footer">
+          <button
+            className="theme-toggle"
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
+          >
+            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </footer>
       </aside>
+
       <main className="content-area">
-        {/* Editor virá aqui */}
-        <p className="empty-state">Selecione ou crie uma nota</p>
+        {!activeDoc ? (
+          <p className="empty-state">Selecione ou crie uma nota</p>
+        ) : (
+          <div className="editor-container">
+            <input
+              className="editor-title"
+              value={activeDoc.title}
+              onChange={(e) =>
+                updateDocument(activeDocId, { title: e.target.value })
+              }
+              placeholder="Título"
+            />
+            <textarea
+              className="editor-content"
+              value={activeDoc.content}
+              onChange={(e) =>
+                updateDocument(activeDocId, { content: e.target.value })
+              }
+              placeholder="Comece a escrever em Markdown..."
+              autoFocus
+            />
+            <footer className="editor-footer">
+              <button
+                className="delete-btn"
+                onClick={() => deleteDocument(activeDocId)}
+                title="Excluir nota"
+              >
+                <Trash2 size={18} />
+              </button>
+            </footer>
+          </div>
+        )}
       </main>
     </div>
   );
