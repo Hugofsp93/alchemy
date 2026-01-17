@@ -3,7 +3,7 @@
 =========================== */
 
 :root {
-  /* Cores - Inspiradas no Bear (modo claro) */
+  /* Colors - Inspired by Bear (light mode) */
   --color-bg: #fafafa;
   --color-sidebar: #f0f0f0;
   --color-text: #1a1a1a;
@@ -14,12 +14,12 @@
   --color-active: #dcdcdc;
   --color-border-sidebar: #64448b;
 
-  /* Tipografia */
+  /* Typography */
   --font-sans: "Avenir Next", "Avenir", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-editor: "Avenir Next", "Avenir", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "SF Mono", "Fira Code", "Menlo", monospace;
 
-  /* Espaçamento */
+  /* Spacing */
   --sidebar-width: 280px;
 }
 
@@ -35,7 +35,7 @@
 }
 
 /* ===========================
-  Layout Base
+  Base Layout
 =========================== */
 
 * {
@@ -54,7 +54,7 @@ body,
   overflow: hidden;
 }
 
-/* Garantir fontes globais em todos os inputs e botões */
+/* Global fonts for inputs and buttons */
 input,
 textarea,
 button {
@@ -132,18 +132,18 @@ button {
   padding: 8px;
 }
 
-/* Item da Sidebar Estilo Bear */
+/* Bear-style Sidebar Item */
 .sidebar-item {
   display: flex;
   padding: 14px;
   border-radius: 5px;
   cursor: pointer;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
   gap: 12px;
   position: relative;
   align-items: stretch;
   transition: background-color 0.1s ease;
-  /* Transição específica e rápida para hover */
+  /* Fast specific transition for hover */
 }
 
 .sidebar-item:hover {
@@ -174,7 +174,7 @@ button {
 }
 
 .sidebar-item-title {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -183,12 +183,21 @@ button {
 }
 
 .sidebar-item-preview {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-text-muted);
   line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-height: 28px;
+}
+
+.sidebar-item-date {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+  margin-top: 6px;
+  font-weight: 500;
 }
 
 /* Sidebar Footer */
@@ -226,7 +235,7 @@ button {
 
 .delete-btn:hover:not(:disabled) {
   color: #e53935;
-  /* Vermelho mais suave para deleção */
+  /* Soft red for deletion */
 }
 
 /* ===========================
@@ -258,7 +267,7 @@ button {
   right: 24px;
   border: none;
   background: transparent;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--color-text-muted);
   outline: none;
@@ -279,7 +288,7 @@ button {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 1.7;
   color: var(--color-text);
   resize: none;
@@ -315,7 +324,7 @@ button {
 
 .empty-state {
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: 16px;
   opacity: 0.6;
 }
 

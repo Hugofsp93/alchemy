@@ -19,19 +19,91 @@ function App() {
 
   const savingRef = useRef(false);
   const saveTimeoutRef = useRef(null);
+  const isDirtyRef = useRef(false);
+  const isExitingRef = useRef(false); // Blocks other saves when exiting
 
-  // Sincroniza tema e janela nativa
+  // DOM Refs for direct access during final Flush
+  const titleInputRef = useRef(null);
+  const contentTextAreaRef = useRef(null);
+
+  // Ref for the current document object (to know ID and other fields during Flush)
+  const currentDocRef = useRef(null);
+
+  // Sync theme with native window
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", isDarkMode ? "dark" : "light");
     getCurrentWindow().setTheme(isDarkMode ? "dark" : "light").catch(console.error);
   }, [isDarkMode]);
 
-  // Atalho Cmd + B
+  // CLOSE INTERCEPTOR (FULL FLUSH)
+  useEffect(() => {
+    let unlisten;
+
+    const setupCloseListener = async () => {
+      const window = getCurrentWindow();
+      unlisten = await window.onCloseRequested((event) => {
+        // If pending changes (dirty) or saving
+        if (isDirtyRef.current || savingRef.current) {
+          event.preventDefault(); // Lock window
+          if (isExitingRef.current) return;
+          isExitingRef.current = true;
+
+          console.log("⚠️ CLOSE DETECTED: Starting direct DOM flush...");
+
+          (async () => {
+            if (currentDocRef.current) {
+              // GET VALUES DIRECTLY FROM DOM ELEMENTS
+              // Bypasses React state delays!
+              const latestTitle = titleInputRef.current?.value ?? currentDocRef.current.title;
+              const latestContent = contentTextAreaRef.current?.value ?? currentDocRef.current.content;
+
+              const flushDoc = {
+                ...currentDocRef.current,
+                title: latestTitle,
+                content: latestContent,
+                updatedAt: Date.now()
+              };
+
+              console.log("💾 Writing final data to disk...");
+              try {
+                // Cancel pending timeout and call Rust IMMEDIATELY
+                if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+                await invoke("save_document", { oldId: flushDoc.id, doc: flushDoc });
+                console.log("✅ Flush complete. Exiting app.");
+              } catch (e) {
+                console.error("❌ Fatal error in final flush:", e);
+              }
+            }
+
+            // Clear dirty flag and destroy window
+            isDirtyRef.current = false;
+            await window.destroy();
+          })();
+        }
+      });
+    };
+
+    setupCloseListener();
+    return () => {
+      if (typeof unlisten === 'function') unlisten();
+    };
+  }, []);
+
+  // Shortcuts Cmd + B and Cmd + S
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         setIsSidebarOpen((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (currentDocRef.current) {
+          const latestTitle = titleInputRef.current?.value ?? currentDocRef.current.title;
+          const latestContent = contentTextAreaRef.current?.value ?? currentDocRef.current.content;
+          const docToSave = { ...currentDocRef.current, title: latestTitle, content: latestContent, updatedAt: Date.now() };
+          saveDocToDisk(docToSave.id, docToSave);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -44,7 +116,7 @@ function App() {
     return [...documents].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [documents]);
 
-  // Load inicial
+  // Initial Load
   useEffect(() => {
     invoke("list_documents")
       .then((docs) => {
@@ -56,20 +128,60 @@ function App() {
       .catch(console.error);
   }, []);
 
+  // FOCUS REFRESH: Updates list when window gains focus
+  // Syncs external changes (deletes/adds) without overwriting local edits
+  useEffect(() => {
+    const handleFocus = async () => {
+      try {
+        const diskDocs = await invoke("list_documents");
+
+        setDocuments((currentDocs) => {
+          // 1. Identify IDs still on disk
+          const validIds = new Set(diskDocs.map((d) => d.id));
+
+          // 2. Remove externally deleted docs from state
+          const preservedDocs = currentDocs.filter((doc) => validIds.has(doc.id));
+
+          // 3. Add externally created docs to state
+          const currentIds = new Set(currentDocs.map((d) => d.id));
+          const newDocs = diskDocs.filter((d) => !currentIds.has(d.id));
+
+          // Avoid re-render if no changes
+          if (preservedDocs.length === currentDocs.length && newDocs.length === 0) {
+            return currentDocs;
+          }
+
+          const merged = [...preservedDocs, ...newDocs];
+          merged.sort((a, b) => b.updatedAt - a.updatedAt);
+
+          return merged;
+        });
+      } catch (e) {
+        console.error("Error syncing on focus:", e);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, []);
+
   const saveDocToDisk = async (oldId, doc) => {
-    if (savingRef.current) return;
+    // Block saves if exiting
+    if (savingRef.current || isExitingRef.current) return;
+
     savingRef.current = true;
     try {
-      const newId = await invoke("save_document", { oldId, doc });
-      // Se o backend atribuiu um novo ID (ex: migração de .md legado), atualiza no estado
+      const newId = await invoke("save_document", { oldId: oldId, doc });
+      isDirtyRef.current = false;
       if (newId !== doc.id) {
         setDocuments((prev) =>
           prev.map((d) => (d.id === doc.id ? { ...d, id: newId } : d))
         );
         setActiveDocId(newId);
       }
+      console.log("💾 Document saved successfully.");
     } catch (err) {
-      console.error("Erro ao salvar no disco:", err);
+      console.error("Error saving to disk:", err);
     } finally {
       savingRef.current = false;
     }
@@ -77,19 +189,21 @@ function App() {
 
   const debouncedSave = (id, doc) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    isDirtyRef.current = true;
     saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
       saveDocToDisk(id, doc);
     }, 500);
   };
 
   const createNewNote = () => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
 
-    // Gerar um ID temporário ou deixar o backend gerar via Save
-    // Aqui geramos o ID no frontend para garantir unicidade absoluta imediata
     const newId = crypto.randomUUID();
 
-    // Calcular o próximo número para o título NoteBan XXXX
     const numbers = documents.map((doc) => {
       const match = doc.title.match(/NoteBan\s+(\d+)/);
       return match ? parseInt(match[1], 10) : 0;
@@ -111,32 +225,34 @@ function App() {
 
     setDocuments((prev) => [newDoc, ...prev]);
     setActiveDocId(newId);
-    saveDocToDisk("", newDoc); // oldId vazio pois é nova
+    currentDocRef.current = newDoc;
+    saveDocToDisk("", newDoc);
   };
 
   const updateDocument = (id, updates) => {
-    let updatedDocForSave = null;
+    // 1. Seek and update the document in the current list
+    const docIndex = documents.findIndex((d) => d.id === id);
+    if (docIndex === -1) return;
+
+    const oldDoc = documents[docIndex];
     const now = Date.now();
+    const newDoc = { ...oldDoc, ...updates, updatedAt: now };
+
+    // 2. Cmd+Q listener
+    currentDocRef.current = newDoc;
 
     setDocuments((prev) => {
-      return prev.map((doc) => {
-        if (doc.id === id) {
-          const newDoc = { ...doc, ...updates, updatedAt: now };
-          updatedDocForSave = newDoc;
-          return newDoc;
-        }
-        return doc;
-      });
+      const newAll = [...prev];
+      // batch updates
+      const idx = newAll.findIndex((d) => d.id === id);
+      if (idx !== -1) {
+        newAll[idx] = newDoc;
+      }
+      return newAll;
     });
 
-    if (updatedDocForSave) {
-      if (updates.title !== undefined) {
-        // Títulos podem ser iguais agora, sem problemas de colisão de ID
-        debouncedSave(id, updatedDocForSave);
-      } else if (updates.content !== undefined) {
-        debouncedSave(id, updatedDocForSave);
-      }
-    }
+    // 4. schedule auto-save
+    debouncedSave(id, newDoc);
   };
 
   const handleConfirmDelete = async () => {
@@ -162,18 +278,31 @@ function App() {
       .substring(0, 60);
   };
 
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString([], { day: '2-digit', month: 'short' }).replace(".", "");
+    }
+  };
+
   return (
     <div className={`app-container ${!isSidebarOpen ? "sidebar-closed" : ""}`}>
       <aside className="sidebar">
         <header className="sidebar-header">
-          <button className="new-note-btn" onClick={createNewNote} title="Nova nota">
+          <button className="new-note-btn" onClick={createNewNote} title="New note">
             <SquarePen size={18} />
           </button>
         </header>
 
         <nav className="sidebar-list">
           {sortedDocs.length === 0 ? (
-            <p className="empty-state">Nenhuma nota ainda</p>
+            <p className="empty-state">No notes yet</p>
           ) : (
             <AnimatePresence initial={true}>
               {sortedDocs.map((doc) => (
@@ -194,10 +323,13 @@ function App() {
                   <div className="sidebar-item-marker" />
                   <div className="sidebar-item-info">
                     <div className="sidebar-item-title">
-                      {doc.title.trim() === "" ? "Sem título" : doc.title}
+                      {doc.title.trim() === "" ? "Untitled" : doc.title}
                     </div>
                     <div className="sidebar-item-preview">
-                      {getPreviewText(doc.content) || "Empty"}
+                      {getPreviewText(doc.content) || ""}
+                    </div>
+                    <div className="sidebar-item-date">
+                      {formatDate(doc.updatedAt)}
                     </div>
                   </div>
                 </motion.div>
@@ -210,7 +342,7 @@ function App() {
           <button
             className="footer-btn theme-toggle"
             onClick={() => setIsDarkMode(!isDarkMode)}
-            title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
+            title={isDarkMode ? "Light Mode" : "Dark Mode"}
           >
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
@@ -219,7 +351,7 @@ function App() {
             <Dialog.Trigger asChild>
               <button
                 className="footer-btn delete-btn"
-                title="Excluir nota"
+                title="Delete note"
                 disabled={!activeDocId}
               >
                 <Trash2 size={16} />
@@ -232,16 +364,16 @@ function App() {
                 <div className="DialogIcon">
                   <Wand2 size={40} />
                 </div>
-                <Dialog.Title className="DialogTitle">Excluir Nota?</Dialog.Title>
+                <Dialog.Title className="DialogTitle">Delete Note?</Dialog.Title>
                 <Dialog.Description className="DialogDescription">
-                  Esta ação é permanente e não poderá ser desfeita. Deseja realmente banir esta nota?
+                  This action is permanent and cannot be undone. Are you sure you want to ban this note?
                 </Dialog.Description>
                 <div className="DialogActions">
                   <Dialog.Close asChild>
-                    <button className="btn-modal btn-cancel">Cancelar</button>
+                    <button className="btn-modal btn-cancel">Cancel</button>
                   </Dialog.Close>
                   <button className="btn-modal btn-delete" onClick={handleConfirmDelete}>
-                    Excluir
+                    Delete
                   </button>
                 </div>
               </Dialog.Content>
@@ -253,25 +385,27 @@ function App() {
       <main className="content-area">
         {!activeDoc ? (
           <div className="empty-view">
-            <p className="empty-state">Selecione ou crie uma nota</p>
+            <p className="empty-state">Select or create a note</p>
           </div>
         ) : (
           <div className="editor-container">
             <input
+              ref={titleInputRef}
               className="editor-title"
               value={activeDoc.title}
               onChange={(e) =>
                 updateDocument(activeDocId, { title: e.target.value })
               }
-              placeholder="Título"
+              placeholder="Title"
             />
             <textarea
+              ref={contentTextAreaRef}
               className="editor-content"
               value={activeDoc.content}
               onChange={(e) =>
                 updateDocument(activeDocId, { content: e.target.value })
               }
-              placeholder="Que alquimia você vai realizar hoje?"
+              placeholder="What alchemy will you perform today?"
               autoFocus
             />
             <img src={logo} alt="NoteBan Logo" className="editor-logo" />

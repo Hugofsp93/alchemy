@@ -14,8 +14,18 @@ pub struct Document {
     pub updated_at: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Frontmatter {
+    id: String,
+    title: String,
+    #[serde(rename = "type")]
+    doc_type: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: u64,
+}
+
 fn get_notes_dir() -> PathBuf {
-    let home = dirs::home_dir().expect("Não foi possível encontrar o diretório home");
+    let home = dirs::home_dir().expect("Could not find home directory");
     home.join("Documents").join("NoteBan")
 }
 
@@ -37,34 +47,57 @@ fn list_documents() -> Result<Vec<Document>, String> {
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
-
-        // Suporta .json (novo formato) e .md (legado)
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        
-        if extension == "json" {
-            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            if let Ok(doc) = serde_json::from_str::<Document>(&content) {
-                documents.push(doc);
-            }
-        } else if extension == "md" {
-            // Migração implícita de arquivos .md legados
-            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
-            let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-            let updated_at = metadata.modified()
-                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64)
-                .unwrap_or(0);
 
-            documents.push(Document {
-                id: Uuid::new_v4().to_string(), // Gera um UUID novo para o arquivo legado
-                title: filename,
-                doc_type: "note".to_string(),
-                content,
-                updated_at,
-            });
-            
-            // Opcional: deletar o .md original após listar (ou deixar para o primeiro save)
-            // Por segurança, vamos apenas listar. O primeiro Save salvará como .json.
+        // --- JSON TO MD MIGRATION ---
+        if extension == "json" {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(doc) = serde_json::from_str::<Document>(&content) {
+                    // Convert to MD with Frontmatter
+                    let frontmatter = Frontmatter {
+                        id: doc.id.clone(),
+                        title: doc.title.clone(),
+                        doc_type: doc.doc_type.clone(),
+                        updated_at: doc.updated_at,
+                    };
+
+                    let yaml = serde_yaml::to_string(&frontmatter).unwrap_or_default();
+                    let new_content = format!("---\n{}---\n{}", yaml, doc.content);
+
+                    let new_path = notes_dir.join(format!("{}.md", doc.id));
+                    if fs::write(&new_path, new_content).is_ok() {
+                        fs::remove_file(&path).ok(); // Delete old JSON
+                    }
+
+                    // Add to valid documents list
+                    documents.push(doc); 
+                    continue; 
+                }
+            }
+        }
+
+        if extension == "md" {
+            let file_content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            // Try parsing YAML frontmatter
+            if file_content.starts_with("---") {
+                if let Some(end_idx) = file_content[3..].find("---") {
+                    let yaml_str = &file_content[3..end_idx+3];
+                    let body = &file_content[end_idx+6..]; // Skip closing --- and newline
+
+                    if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(yaml_str) {
+                        documents.push(Document {
+                            id: fm.id,
+                            title: fm.title,
+                            doc_type: fm.doc_type,
+                            content: body.trim_start().to_string(), // Remove extra initial newline
+                            updated_at: fm.updated_at,
+                        });
+                        continue;
+                    }
+                }
+            }
+            // Fallback for old MD without frontmatter (legacy support)
+            // We ignore them as we've handled pure MDs before.
         }
     }
 
@@ -76,29 +109,33 @@ fn list_documents() -> Result<Vec<Document>, String> {
 fn save_document(old_id: String, mut doc: Document) -> Result<String, String> {
     let notes_dir = ensure_notes_dir().map_err(|e| e.to_string())?;
 
-    // Se a nota não tem ID (é nova ou migrada), gera um.
     if doc.id.is_empty() {
         doc.id = Uuid::new_v4().to_string();
     }
 
-    let file_path = notes_dir.join(format!("{}.json", doc.id));
-    
-    // Se o old_id for diferente do novo id (e não for vazio), 
-    // significa que estamos renomeando o ID (raro com UUID, mas bom ter)
+    // Prepare Frontmatter
+    let frontmatter = Frontmatter {
+        id: doc.id.clone(),
+        title: doc.title.clone(),
+        doc_type: doc.doc_type.clone(),
+        updated_at: doc.updated_at,
+    };
+
+    let yaml = serde_yaml::to_string(&frontmatter).map_err(|e| e.to_string())?;
+    let file_content = format!("---\n{}---\n{}", yaml, doc.content);
+
+    // Save as .md using ID as filename (to ensure filesystem uniqueness)
+    let file_path = notes_dir.join(format!("{}.md", doc.id));
+
+    // If ID changed (e.g. migration), clear old file
     if !old_id.is_empty() && old_id != doc.id {
-        let old_path = notes_dir.join(format!("{}.json", old_id));
-        let old_md_path = notes_dir.join(format!("{}.md", old_id));
-        
+        let old_path = notes_dir.join(format!("{}.md", old_id));
         if old_path.exists() {
             fs::remove_file(old_path).ok();
         }
-        if old_md_path.exists() {
-            fs::remove_file(old_md_path).ok();
-        }
     }
 
-    let json = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
-    fs::write(&file_path, json).map_err(|e| e.to_string())?;
+    fs::write(&file_path, file_content).map_err(|e| e.to_string())?;
 
     Ok(doc.id)
 }
@@ -106,18 +143,15 @@ fn save_document(old_id: String, mut doc: Document) -> Result<String, String> {
 #[tauri::command]
 fn delete_document(id: String) -> Result<(), String> {
     let notes_dir = get_notes_dir();
-    
-    // Tenta deletar tanto .json quanto .md legado
-    let json_path = notes_dir.join(format!("{}.json", id));
     let md_path = notes_dir.join(format!("{}.md", id));
-
-    if json_path.exists() {
-        fs::remove_file(json_path).map_err(|e| e.to_string())?;
-    }
     if md_path.exists() {
-        fs::remove_file(md_path).ok(); // Ignora erro no MD se o JSON já foi deletado
+        fs::remove_file(md_path).map_err(|e| e.to_string())?;
     }
-
+    // Try cleaning up JSON if any remains
+    let json_path = notes_dir.join(format!("{}.json", id));
+    if json_path.exists() {
+        fs::remove_file(json_path).ok();
+    }
     Ok(())
 }
 
