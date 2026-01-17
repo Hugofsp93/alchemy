@@ -21,6 +21,23 @@
 
   /* Spacing */
   --sidebar-width: 280px;
+
+  /* Mage Themes - Default (Purple) */
+  --color-accent-bg: #64448b;
+  --color-accent-text: #ffffff;
+}
+
+/* Mage Themes - Specific Overrides */
+[data-mage-theme='red'] {
+  --color-accent-bg: #e53935;
+}
+
+[data-mage-theme='orange'] {
+  --color-accent-bg: #f57c00;
+}
+
+[data-mage-theme='dark_gray'] {
+  --color-accent-bg: #90a2aa;
 }
 
 /* Dark Mode Support */
@@ -101,13 +118,67 @@ button {
 }
 
 .editor-logo {
-  height: 35px;
+  height: 60px;
   width: auto;
   object-fit: contain;
   position: absolute;
-  bottom: 0;
-  right: 0;
-  margin: 10px 12px;
+  bottom: 12px;
+  right: 12px;
+  cursor: pointer;
+  transition: all 0.4s;
+  z-index: 1000;
+}
+
+.editor-logo:hover {
+  transform: scale(1.2) rotate(-3deg);
+}
+
+.editor-logo:active {
+  transform: scale(0.95);
+}
+
+.mage-splash-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.mage-splash-overlay {
+  position: absolute;
+  bottom: 80px;
+  right: 12px;
+  background-color: transparent;
+  grid-template-columns: repeat(1, 1fr);
+  z-index: 1001;
+  width: 60px;
+}
+
+.mage-option {
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s;
+  padding: 4px;
+  border-radius: 50%;
+}
+
+.mage-option:hover {
+  background-color: var(--color-hover);
+  /* transform: translateY(-20px); */
+  transform: scale(1.1) rotate(-3deg);
+}
+
+.mage-option.active {
+  background-color: var(--color-active);
+}
+
+.mage-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .new-note-btn {
@@ -120,10 +191,11 @@ button {
   align-items: center;
   justify-content: center;
   transition: color 0.15s ease;
+  margin-right: 10px;
 }
 
 .new-note-btn:hover {
-  color: var(--color-accent);
+  color: var(--color-accent-bg);
 }
 
 .sidebar-list {
@@ -152,7 +224,7 @@ button {
 
 .sidebar-item.active {
   background-color: var(--color-active);
-  border-right: 5px solid var(--color-border-sidebar);
+  border-right: 5px solid var(--color-accent-bg);
 }
 
 .sidebar-item-marker {
@@ -269,7 +341,7 @@ button {
   background: transparent;
   font-size: 20px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--color-accent-bg);
   outline: none;
   text-align: right;
   width: auto;
@@ -384,7 +456,7 @@ button {
 }
 
 .DialogIcon {
-  color: var(--color-border-sidebar);
+  color: var(--color-accent-bg);
   display: flex;
   justify-content: center;
 }
@@ -418,7 +490,7 @@ button {
 }
 
 .btn-delete {
-  background-color: var(--color-border-sidebar);
+  background-color: var(--color-accent-bg);
   color: white;
   border: none;
 }
