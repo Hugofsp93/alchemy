@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "noteban",
-        "width": 800,
-        "height": 600
+        "title": "",
+        "width": 1200,
+        "height": 800,
+        "titleBarStyle": "Transparent"
       }
     ],
     "security": {

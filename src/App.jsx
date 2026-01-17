@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Moon, Sun, SquarePen, Trash2, FileText, Kanban } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import * as Dialog from "@radix-ui/react-dialog";
+import { motion, AnimatePresence } from "framer-motion";
+import { Moon, Sun, SquarePen, Trash2, Wand2 } from "lucide-react";
 import logo from "./assets/mage.png";
 import "./App.css";
 
@@ -12,14 +15,18 @@ function App() {
     window.matchMedia("(prefers-color-scheme: dark)").matches
   );
 
-  const savingRef = useRef(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Sincroniza o atributo data-theme no body
+  const savingRef = useRef(false);
+  const saveTimeoutRef = useRef(null);
+
+  // Sincroniza tema e janela nativa
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", isDarkMode ? "dark" : "light");
+    getCurrentWindow().setTheme(isDarkMode ? "dark" : "light").catch(console.error);
   }, [isDarkMode]);
 
-  // Atalho Cmd + B para fechar/abrir a sidebar
+  // Atalho Cmd + B
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
@@ -31,10 +38,13 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const activeDoc = documents.find((doc) => doc.id === activeDocId);
-  const sortedDocs = [...documents].sort((a, b) => b.updatedAt - a.updatedAt);
+  const activeDoc = useMemo(() => documents.find((doc) => doc.id === activeDocId), [documents, activeDocId]);
 
-  // Carrega documentos
+  const sortedDocs = useMemo(() => {
+    return [...documents].sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [documents]);
+
+  // Load inicial
   useEffect(() => {
     invoke("list_documents")
       .then((docs) => {
@@ -46,91 +56,118 @@ function App() {
       .catch(console.error);
   }, []);
 
-  const saveDoc = async (oldId, doc) => {
+  const saveDocToDisk = async (oldId, doc) => {
     if (savingRef.current) return;
     savingRef.current = true;
     try {
       const newId = await invoke("save_document", { oldId, doc });
-      if (newId !== oldId) {
+      // Se o backend atribuiu um novo ID (ex: migração de .md legado), atualiza no estado
+      if (newId !== doc.id) {
         setDocuments((prev) =>
-          prev.map((d) => (d.id === oldId ? { ...d, id: newId } : d))
+          prev.map((d) => (d.id === doc.id ? { ...d, id: newId } : d))
         );
         setActiveDocId(newId);
       }
     } catch (err) {
-      console.error("Erro ao salvar:", err);
+      console.error("Erro ao salvar no disco:", err);
     } finally {
       savingRef.current = false;
     }
   };
 
+  const debouncedSave = (id, doc) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveDocToDisk(id, doc);
+    }, 500);
+  };
+
   const createNewNote = () => {
-    const timestamp = Date.now();
-    const noteNumber = String(documents.length + 1).padStart(4, "0");
-    const newId = `NoteBan ${noteNumber}`;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    // Gerar um ID temporário ou deixar o backend gerar via Save
+    // Aqui geramos o ID no frontend para garantir unicidade absoluta imediata
+    const newId = crypto.randomUUID();
+
+    // Calcular o próximo número para o título NoteBan XXXX
+    const numbers = documents.map((doc) => {
+      const match = doc.title.match(/NoteBan\s+(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    const noteNumberString = String(nextNumber).padStart(4, "0");
+    const newTitle = `NoteBan ${noteNumberString}`;
+
+    const maxExistingTimestamp = documents.reduce((max, d) => Math.max(max, d.updatedAt), 0);
+    const timestamp = Math.max(Date.now(), maxExistingTimestamp + 1);
+
     const newDoc = {
       id: newId,
-      title: newId,
+      title: newTitle,
       type: "note",
       content: "",
       updatedAt: timestamp,
     };
-    setDocuments([newDoc, ...documents]);
-    setActiveDocId(newDoc.id);
-    saveDoc(newDoc.id, newDoc);
+
+    setDocuments((prev) => [newDoc, ...prev]);
+    setActiveDocId(newId);
+    saveDocToDisk("", newDoc); // oldId vazio pois é nova
   };
 
   const updateDocument = (id, updates) => {
-    setDocuments((prev) =>
-      prev.map((doc) =>
-        doc.id === id ? { ...doc, ...updates, updatedAt: Date.now() } : doc
-      )
-    );
+    let updatedDocForSave = null;
+    const now = Date.now();
 
-    const currentDoc = documents.find((d) => d.id === id);
-    if (currentDoc) {
-      const nextDoc = { ...currentDoc, ...updates, updatedAt: Date.now() };
-      if (nextDoc.title.trim() !== "") {
-        saveDoc(id, nextDoc);
+    setDocuments((prev) => {
+      return prev.map((doc) => {
+        if (doc.id === id) {
+          const newDoc = { ...doc, ...updates, updatedAt: now };
+          updatedDocForSave = newDoc;
+          return newDoc;
+        }
+        return doc;
+      });
+    });
+
+    if (updatedDocForSave) {
+      if (updates.title !== undefined) {
+        // Títulos podem ser iguais agora, sem problemas de colisão de ID
+        debouncedSave(id, updatedDocForSave);
+      } else if (updates.content !== undefined) {
+        debouncedSave(id, updatedDocForSave);
       }
     }
   };
 
-  const deleteDocument = (id) => {
-    if (!id) {
-      console.warn("Nenhum id fornecido para exclusão");
-      return;
-    }
-
-    if (window.confirm("Tem certeza que deseja excluir esta nota?")) {
-      invoke("delete_document", { id })
-        .then(() => {
-          const remaining = documents.filter((doc) => doc.id !== id);
-          setDocuments(remaining);
-          setActiveDocId(remaining.length > 0 ? remaining[0].id : null);
-        })
-        .catch(err => {
-          console.error("Erro ao excluir documento:", err);
-          alert("Erro ao excluir a nota.");
-        });
+  const handleConfirmDelete = async () => {
+    if (!activeDocId) return;
+    try {
+      await invoke("delete_document", { id: activeDocId });
+      setDocuments((prev) => {
+        const remaining = prev.filter((doc) => doc.id !== activeDocId);
+        const nextId = remaining.length > 0 ? remaining[0].id : null;
+        setActiveDocId(nextId);
+        return remaining;
+      });
+      setIsDeleteDialogOpen(false);
+    } catch (err) {
+      console.error("Erro ao excluir:", err);
     }
   };
 
-  // Helper para limpar markdown do preview
   const getPreviewText = (content) => {
     return content
-      .replace(/[#*`_~]/g, "") // Remove símbolos básicos de markdown
+      .replace(/[#*`_~]/g, "")
       .trim()
-      .substring(0, 70);
+      .substring(0, 60);
   };
 
   return (
     <div className={`app-container ${!isSidebarOpen ? "sidebar-closed" : ""}`}>
       <aside className="sidebar">
         <header className="sidebar-header">
-          <img src={logo} alt="NoteBan Logo" className="sidebar-logo" />
           <button className="new-note-btn" onClick={createNewNote} title="Nova nota">
-            < SquarePen size={18} />
+            <SquarePen size={18} />
           </button>
         </header>
 
@@ -138,22 +175,34 @@ function App() {
           {sortedDocs.length === 0 ? (
             <p className="empty-state">Nenhuma nota ainda</p>
           ) : (
-            sortedDocs.map((doc) => (
-              <div
-                key={doc.id}
-                className={`sidebar-item ${doc.id === activeDocId ? "active" : ""}`}
-                onClick={() => setActiveDocId(doc.id)}
-              >
-                <div className="sidebar-item-info">
-                  <div className="sidebar-item-title">
-                    {doc.title.trim() === "" ? "Sem título" : doc.title}
+            <AnimatePresence initial={true}>
+              {sortedDocs.map((doc) => (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+                  transition={{
+                    layout: { type: "tween", ease: "easeOut", duration: 0.25 },
+                    opacity: { duration: 0.2 },
+                    y: { duration: 0.2 }
+                  }}
+                  key={doc.id}
+                  className={`sidebar-item ${doc.id === activeDocId ? "active" : ""}`}
+                  onClick={() => setActiveDocId(doc.id)}
+                >
+                  <div className="sidebar-item-marker" />
+                  <div className="sidebar-item-info">
+                    <div className="sidebar-item-title">
+                      {doc.title.trim() === "" ? "Sem título" : doc.title}
+                    </div>
+                    <div className="sidebar-item-preview">
+                      {getPreviewText(doc.content) || "Empty"}
+                    </div>
                   </div>
-                  <div className="sidebar-item-preview">
-                    {getPreviewText(doc.content) || "Empty"}
-                  </div>
-                </div>
-              </div>
-            ))
+                </motion.div>
+              ))}
+            </AnimatePresence>
           )}
         </nav>
 
@@ -166,14 +215,38 @@ function App() {
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          <button
-            className="footer-btn delete-btn"
-            onClick={() => deleteDocument(activeDocId)}
-            disabled={!activeDocId}
-            title="Excluir nota"
-          >
-            <Trash2 size={16} />
-          </button>
+          <Dialog.Root open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <Dialog.Trigger asChild>
+              <button
+                className="footer-btn delete-btn"
+                title="Excluir nota"
+                disabled={!activeDocId}
+              >
+                <Trash2 size={16} />
+              </button>
+            </Dialog.Trigger>
+
+            <Dialog.Portal>
+              <Dialog.Overlay className="DialogOverlay" />
+              <Dialog.Content className="DialogContent">
+                <div className="DialogIcon">
+                  <Wand2 size={40} />
+                </div>
+                <Dialog.Title className="DialogTitle">Excluir Nota?</Dialog.Title>
+                <Dialog.Description className="DialogDescription">
+                  Esta ação é permanente e não poderá ser desfeita. Deseja realmente banir esta nota?
+                </Dialog.Description>
+                <div className="DialogActions">
+                  <Dialog.Close asChild>
+                    <button className="btn-modal btn-cancel">Cancelar</button>
+                  </Dialog.Close>
+                  <button className="btn-modal btn-delete" onClick={handleConfirmDelete}>
+                    Excluir
+                  </button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </footer>
       </aside>
 
@@ -198,9 +271,10 @@ function App() {
               onChange={(e) =>
                 updateDocument(activeDocId, { content: e.target.value })
               }
-              placeholder="Comece a escrever em Markdown..."
+              placeholder="Que alquimia você vai realizar hoje?"
               autoFocus
             />
+            <img src={logo} alt="NoteBan Logo" className="editor-logo" />
           </div>
         )}
       </main>

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-// use tauri::Manager;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Document {
@@ -38,28 +38,33 @@ fn list_documents() -> Result<Vec<Document>, String> {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |ext| ext == "md") {
+        // Suporta .json (novo formato) e .md (legado)
+        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        
+        if extension == "json" {
+            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            if let Ok(doc) = serde_json::from_str::<Document>(&content) {
+                documents.push(doc);
+            }
+        } else if extension == "md" {
+            // Migração implícita de arquivos .md legados
             let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
             let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
-
-            let filename = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-
-            let updated_at = metadata
-                .modified()
+            let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+            let updated_at = metadata.modified()
                 .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64)
                 .unwrap_or(0);
 
             documents.push(Document {
-                id: filename.clone(),
-                title: filename, // Agora o título é SEMPRE o nome do arquivo
+                id: Uuid::new_v4().to_string(), // Gera um UUID novo para o arquivo legado
+                title: filename,
                 doc_type: "note".to_string(),
                 content,
                 updated_at,
             });
+            
+            // Opcional: deletar o .md original após listar (ou deixar para o primeiro save)
+            // Por segurança, vamos apenas listar. O primeiro Save salvará como .json.
         }
     }
 
@@ -68,37 +73,49 @@ fn list_documents() -> Result<Vec<Document>, String> {
 }
 
 #[tauri::command]
-fn save_document(old_id: String, doc: Document) -> Result<String, String> {
+fn save_document(old_id: String, mut doc: Document) -> Result<String, String> {
     let notes_dir = ensure_notes_dir().map_err(|e| e.to_string())?;
+
+    // Se a nota não tem ID (é nova ou migrada), gera um.
+    if doc.id.is_empty() {
+        doc.id = Uuid::new_v4().to_string();
+    }
+
+    let file_path = notes_dir.join(format!("{}.json", doc.id));
     
-    // O novo ID/Título limpo para ser usado como nome de arquivo
-    let clean_title = doc.title.replace("/", "-").replace("\\", "-").trim().to_string();
-    if clean_title.is_empty() {
-        return Err("O título não pode estar vazio".to_string());
+    // Se o old_id for diferente do novo id (e não for vazio), 
+    // significa que estamos renomeando o ID (raro com UUID, mas bom ter)
+    if !old_id.is_empty() && old_id != doc.id {
+        let old_path = notes_dir.join(format!("{}.json", old_id));
+        let old_md_path = notes_dir.join(format!("{}.md", old_id));
+        
+        if old_path.exists() {
+            fs::remove_file(old_path).ok();
+        }
+        if old_md_path.exists() {
+            fs::remove_file(old_md_path).ok();
+        }
     }
 
-    let old_path = notes_dir.join(format!("{}.md", old_id));
-    let new_path = notes_dir.join(format!("{}.md", clean_title));
+    let json = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
+    fs::write(&file_path, json).map_err(|e| e.to_string())?;
 
-    // Se o ID mudou (título mudou), renomeia o arquivo
-    if old_id != clean_title && old_path.exists() {
-        fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
-    }
-
-    // Salva o conteúdo no (novo) arquivo
-    fs::write(&new_path, &doc.content).map_err(|e| e.to_string())?;
-
-    // Retorna o novo ID para o frontend se atualizar
-    Ok(clean_title)
+    Ok(doc.id)
 }
 
 #[tauri::command]
 fn delete_document(id: String) -> Result<(), String> {
     let notes_dir = get_notes_dir();
-    let file_path = notes_dir.join(format!("{}.md", id));
+    
+    // Tenta deletar tanto .json quanto .md legado
+    let json_path = notes_dir.join(format!("{}.json", id));
+    let md_path = notes_dir.join(format!("{}.md", id));
 
-    if file_path.exists() {
-        fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    if json_path.exists() {
+        fs::remove_file(json_path).map_err(|e| e.to_string())?;
+    }
+    if md_path.exists() {
+        fs::remove_file(md_path).ok(); // Ignora erro no MD se o JSON já foi deletado
     }
 
     Ok(())
@@ -108,6 +125,7 @@ fn delete_document(id: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             list_documents,
             save_document,
