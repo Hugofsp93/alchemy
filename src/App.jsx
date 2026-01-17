@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as Dialog from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { Moon, Sun, SquarePen, Trash2, Wand2, PanelLeftClose } from "lucide-react";
+import Editor from "./components/Editor";
 
 // Mage Icons - Selected Council
 import magePurple from "./assets/mage_purple.png";
@@ -41,7 +42,7 @@ function App() {
 
   // DOM Refs for direct access during final Flush
   const titleInputRef = useRef(null);
-  const contentTextAreaRef = useRef(null);
+  const editorRef = useRef(null);
 
   // Ref for the current document object
   const currentDocRef = useRef(null);
@@ -74,7 +75,7 @@ function App() {
           (async () => {
             if (currentDocRef.current) {
               const latestTitle = titleInputRef.current?.value ?? currentDocRef.current.title;
-              const latestContent = contentTextAreaRef.current?.value ?? currentDocRef.current.content;
+              const latestContent = editorRef.current?.getMarkdown?.() ?? currentDocRef.current.content;
 
               const flushDoc = {
                 ...currentDocRef.current,
@@ -117,7 +118,7 @@ function App() {
         e.preventDefault();
         if (currentDocRef.current) {
           const latestTitle = titleInputRef.current?.value ?? currentDocRef.current.title;
-          const latestContent = contentTextAreaRef.current?.value ?? currentDocRef.current.content;
+          const latestContent = editorRef.current?.getMarkdown?.() ?? currentDocRef.current.content;
           const docToSave = { ...currentDocRef.current, title: latestTitle, content: latestContent, updatedAt: Date.now() };
           saveDocToDisk(docToSave.id, docToSave);
         }
@@ -163,6 +164,8 @@ function App() {
           if (preservedDocs.length === currentDocs.length && newDocs.length === 0) return currentDocs;
           const merged = [...preservedDocs, ...newDocs];
           merged.sort((a, b) => b.updatedAt - a.updatedAt);
+          // Update documentsRef to sync numbering
+          documentsRef.current = merged;
           return merged;
         });
       } catch (e) {
@@ -283,11 +286,12 @@ function App() {
     <div className={`app-container ${!isSidebarOpen ? "sidebar-closed" : ""}`}>
       <aside className="sidebar">
         <header className="sidebar-header">
+          <div className="drag-region" data-tauri-drag-region />
           <button className="new-note-btn" onClick={() => setIsSidebarOpen(false)} title="Hide sidebar (⌘B)">
-            <PanelLeftClose size={18} />
+            <PanelLeftClose size={22} />
           </button>
-          <button className="new-note-btn" onClick={createNewNote} title="New note">
-            <SquarePen size={18} />
+          <button className="new-note-btn" onClick={createNewNote} title="New note (⌘T)">
+            <SquarePen size={22} />
           </button>
         </header>
 
@@ -360,6 +364,7 @@ function App() {
           <div className="empty-view"><p className="empty-state">Choose a scroll or conjure a new one</p></div>
         ) : (
           <div className="editor-container">
+            <div className="content-drag-region" data-tauri-drag-region />
             <input
               ref={titleInputRef}
               className="editor-title"
@@ -367,13 +372,12 @@ function App() {
               onChange={(e) => updateDocument(activeDocId, { title: e.target.value })}
               placeholder="Title"
             />
-            <textarea
-              ref={contentTextAreaRef}
-              className="editor-content"
-              value={activeDoc.content}
-              onChange={(e) => updateDocument(activeDocId, { content: e.target.value })}
+            <Editor
+              ref={editorRef}
+              key={activeDocId}
+              content={activeDoc.content}
+              onUpdate={(md) => updateDocument(activeDocId, { content: md })}
               placeholder="What kind of sorcery will you perform today?"
-              autoFocus
             />
           </div>
         )}
