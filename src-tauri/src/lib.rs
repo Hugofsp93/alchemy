@@ -26,7 +26,7 @@ struct Frontmatter {
 
 fn get_notes_dir() -> PathBuf {
     let home = dirs::home_dir().expect("Could not find home directory");
-    home.join("Documents").join("NoteBan")
+    home.join("Documents").join("Alchemy")
 }
 
 fn ensure_notes_dir() -> std::io::Result<PathBuf> {

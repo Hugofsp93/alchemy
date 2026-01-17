@@ -29,7 +29,7 @@ function App() {
   );
 
   // Mage Theme State
-  const [mageTheme, setMageTheme] = useState(localStorage.getItem("noteban-mage-theme") || "purple");
+  const [mageTheme, setMageTheme] = useState(localStorage.getItem("alchemy-mage-theme") || "purple");
   const [isMageSplashOpen, setIsMageSplashOpen] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -46,11 +46,14 @@ function App() {
   // Ref for the current document object
   const currentDocRef = useRef(null);
 
+  // Ref to always have latest documents for keyboard shortcuts
+  const documentsRef = useRef([]);
+
   // Sync theme and Mage theme with root element
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", isDarkMode ? "dark" : "light");
     document.documentElement.setAttribute("data-mage-theme", mageTheme);
-    localStorage.setItem("noteban-mage-theme", mageTheme);
+    localStorage.setItem("alchemy-mage-theme", mageTheme);
     getCurrentWindow().setTheme(isDarkMode ? "dark" : "light").catch(console.error);
   }, [isDarkMode, mageTheme]);
 
@@ -139,6 +142,7 @@ function App() {
     invoke("list_documents")
       .then((docs) => {
         setDocuments(docs);
+        documentsRef.current = docs;
         if (docs.length > 0 && !activeDocId) {
           setActiveDocId(docs[0].id);
         }
@@ -203,17 +207,22 @@ function App() {
       saveTimeoutRef.current = null;
     }
     const newId = crypto.randomUUID();
-    const numbers = documents.map((doc) => {
-      const match = doc.title.match(/NoteBan\s+(\d+)/);
+    const currentDocs = documentsRef.current;
+    const numbers = currentDocs.map((doc) => {
+      const match = doc.title.match(/Alchemy\s+(\d+)/);
       return match ? parseInt(match[1], 10) : 0;
     });
     const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
     const noteNumberString = String(nextNumber).padStart(4, "0");
-    const newTitle = `NoteBan ${noteNumberString}`;
-    const maxExistingTimestamp = documents.reduce((max, d) => Math.max(max, d.updatedAt), 0);
+    const newTitle = `Alchemy ${noteNumberString}`;
+    const maxExistingTimestamp = currentDocs.reduce((max, d) => Math.max(max, d.updatedAt), 0);
     const timestamp = Math.max(Date.now(), maxExistingTimestamp + 1);
     const newDoc = { id: newId, title: newTitle, type: "note", content: "", updatedAt: timestamp };
-    setDocuments((prev) => [newDoc, ...prev]);
+    setDocuments((prev) => {
+      const updated = [newDoc, ...prev];
+      documentsRef.current = updated;
+      return updated;
+    });
     setActiveDocId(newId);
     currentDocRef.current = newDoc;
     saveDocToDisk("", newDoc);
@@ -230,6 +239,7 @@ function App() {
       const newAll = [...prev];
       const idx = newAll.findIndex((d) => d.id === id);
       if (idx !== -1) newAll[idx] = newDoc;
+      documentsRef.current = newAll;
       return newAll;
     });
     debouncedSave(id, newDoc);
@@ -243,6 +253,7 @@ function App() {
         const remaining = prev.filter((doc) => doc.id !== activeDocId);
         const nextId = remaining.length > 0 ? remaining[0].id : null;
         setActiveDocId(nextId);
+        documentsRef.current = remaining;
         return remaining;
       });
       setIsDeleteDialogOpen(false);
@@ -282,7 +293,7 @@ function App() {
 
         <nav className="sidebar-list">
           {sortedDocs.length === 0 ? (
-            <p className="empty-state">No notes yet</p>
+            <p className="empty-state">The library is empty</p>
           ) : (
             <AnimatePresence initial={true}>
               {sortedDocs.map((doc) => (
@@ -298,7 +309,7 @@ function App() {
                   <div className="sidebar-item-marker" />
                   <div className="sidebar-item-info">
                     <div className="sidebar-item-title">{doc.title.trim() === "" ? "Untitled" : doc.title}</div>
-                    <div className="sidebar-item-preview">{getPreviewText(doc.content) || ""}</div>
+                    <div className="sidebar-item-preview">{getPreviewText(doc.content) || "Blank parchment"}</div>
                     <div className="sidebar-item-date">{formatDate(doc.updatedAt)}</div>
                   </div>
                 </motion.div>
@@ -320,11 +331,19 @@ function App() {
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="DialogOverlay" />
-              <Dialog.Content className="DialogContent">
+              <Dialog.Content
+                className="DialogContent"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleConfirmDelete();
+                  }
+                }}
+              >
                 <div className="DialogIcon"><Wand2 size={40} /></div>
                 <Dialog.Title className="DialogTitle">Delete Note?</Dialog.Title>
                 <Dialog.Description className="DialogDescription">
-                  This action is permanent and cannot be undone. Are you sure you want to ban this note?
+                  This spell is irreversible. Banish this scroll to the void?
                 </Dialog.Description>
                 <div className="DialogActions">
                   <Dialog.Close asChild><button className="btn-modal btn-cancel">Cancel</button></Dialog.Close>
@@ -338,7 +357,7 @@ function App() {
 
       <main className="content-area">
         {!activeDoc ? (
-          <div className="empty-view"><p className="empty-state">Select or create a note</p></div>
+          <div className="empty-view"><p className="empty-state">Choose a scroll or conjure a new one</p></div>
         ) : (
           <div className="editor-container">
             <input
@@ -353,7 +372,7 @@ function App() {
               className="editor-content"
               value={activeDoc.content}
               onChange={(e) => updateDocument(activeDocId, { content: e.target.value })}
-              placeholder="What alchemy will you perform today?"
+              placeholder="What kind of sorcery will you perform today?"
               autoFocus
             />
           </div>

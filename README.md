@@ -1,4 +1,4 @@
-# NoteBan
+# Alchemy
 
 A minimalist note-taking app, built with **Tauri 2.0**, **React**, and **Rust**.
 
@@ -31,8 +31,8 @@ A minimalist note-taking app, built with **Tauri 2.0**, **React**, and **Rust**.
 
 ```bash
 # Clone the repository
-git clone https://github.com/Hugofsp93/noteban.git
-cd noteban
+git clone https://github.com/Hugofsp93/alchemy.git
+cd alchemy
 
 # Install dependencies
 npm install
@@ -44,7 +44,7 @@ npm run tauri dev
 ## 📁 Project Structure
 
 ```
-noteban/
+alchemy/
 ├── src/              # React frontend
 │   ├── App.jsx       # Main application
 │   └── App.css       # Styles & design system
