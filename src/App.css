@@ -77,6 +77,13 @@ textarea,
 button {
   font-family: inherit;
   color: inherit;
+  outline: none;
+}
+
+input:focus,
+textarea:focus,
+button:focus {
+  outline: none;
 }
 
 .app-container {
