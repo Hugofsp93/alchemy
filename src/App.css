@@ -306,6 +306,11 @@ button:focus {
   height: 48px;
 }
 
+.footer-left-btns {
+  display: flex;
+  align-items: center;
+}
+
 .footer-btn {
   background: transparent;
   border: none;

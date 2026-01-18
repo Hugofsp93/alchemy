@@ -31,6 +31,10 @@ const Editor = forwardRef(({ content, onUpdate, placeholder }, ref) => {
     content: marked.parse(content || ''),
     onUpdate: ({ editor }) => {
       // Get markdown back from Tiptap to save
+      // Only trigger update if the user is actually editing (focused)
+      // This prevents "normalization on load" from marking the doc as dirty
+      if (!editor.isFocused) return;
+
       const md = editor.getMarkdown();
       onUpdate(md);
     },

@@ -1,25 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import * as Dialog from "@radix-ui/react-dialog";
-import { motion, AnimatePresence } from "framer-motion";
-import { Moon, Sun, SquarePen, Trash2, Wand2, PanelLeftClose, CircleHelp } from "lucide-react";
 import Editor from "./components/Editor";
-
-// Mage Icons - Selected Council
-import magePurple from "./assets/mage_purple.png";
-import mageRed from "./assets/mage_red.png";
-import mageOrange from "./assets/mage_orange.png";
-import mageDarkGray from "./assets/mage_dark_gray.png";
+import Sidebar from "./components/Sidebar";
+import MageSwitcher from "./components/MageSwitcher";
 
 import "./App.css";
-
-const MAGE_THEMES = [
-  { id: "purple", icon: magePurple, color: "#64448b" },
-  { id: "red", icon: mageRed, color: "#e53935" },
-  { id: "orange", icon: mageOrange, color: "#f57c00" },
-  { id: "dark_gray", icon: mageDarkGray, color: "#455a64" },
-];
 
 function App() {
   const [documents, setDocuments] = useState([]);
@@ -31,10 +17,6 @@ function App() {
 
   // Mage Theme State
   const [mageTheme, setMageTheme] = useState(localStorage.getItem("alchemy-mage-theme") || "purple");
-  const [isMageSplashOpen, setIsMageSplashOpen] = useState(false);
-
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const savingRef = useRef(false);
   const saveTimeoutRef = useRef(null);
@@ -236,6 +218,10 @@ function App() {
     const docIndex = documents.findIndex((d) => d.id === id);
     if (docIndex === -1) return;
     const oldDoc = documents[docIndex];
+
+    // Guard against identical content updates
+    if (updates.content !== undefined && updates.content === oldDoc.content) return;
+
     const now = Date.now();
     const newDoc = { ...oldDoc, ...updates, updatedAt: now };
     currentDocRef.current = newDoc;
@@ -249,172 +235,34 @@ function App() {
     debouncedSave(id, newDoc);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!activeDocId) return;
+  const handleDeleteDoc = async (id) => {
     try {
-      await invoke("delete_document", { id: activeDocId });
+      await invoke("delete_document", { id });
       setDocuments((prev) => {
-        const remaining = prev.filter((doc) => doc.id !== activeDocId);
+        const remaining = prev.filter((doc) => doc.id !== id);
         const nextId = remaining.length > 0 ? remaining[0].id : null;
         setActiveDocId(nextId);
         documentsRef.current = remaining;
         return remaining;
       });
-      setIsDeleteDialogOpen(false);
     } catch (err) {
       console.error("Error deleting:", err);
     }
   };
 
-  const getPreviewText = (content) => {
-    return content.replace(/[#*`_~]/g, "").trim().substring(0, 60);
-  };
-
-  const formatDate = (timestamp) => {
-    if (!timestamp) return "";
-    const date = new Date(timestamp);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString([], { day: '2-digit', month: 'short' }).replace(".", "");
-  };
-
-  const currentMageIcon = useMemo(() => {
-    return MAGE_THEMES.find(t => t.id === mageTheme)?.icon || magePurple;
-  }, [mageTheme]);
-
   return (
     <div className={`app-container ${!isSidebarOpen ? "sidebar-closed" : ""}`}>
-      <aside className="sidebar">
-        <header className="sidebar-header">
-          <div className="drag-region" data-tauri-drag-region />
-          <button className="new-note-btn" onClick={() => setIsSidebarOpen(false)} title="Hide sidebar (⌘B)">
-            <PanelLeftClose size={22} />
-          </button>
-          <button className="new-note-btn" onClick={createNewNote} title="New note (⌘T)">
-            <SquarePen size={22} />
-          </button>
-        </header>
-
-        <nav className="sidebar-list">
-          {sortedDocs.length === 0 ? (
-            <p className="empty-state">The library is empty</p>
-          ) : (
-            <AnimatePresence initial={true}>
-              {sortedDocs.map((doc) => (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
-                  key={doc.id}
-                  className={`sidebar-item ${doc.id === activeDocId ? "active" : ""}`}
-                  onClick={() => setActiveDocId(doc.id)}
-                >
-                  <div className="sidebar-item-marker" />
-                  <div className="sidebar-item-info">
-                    <div className="sidebar-item-title">{doc.title.trim() === "" ? "Untitled" : doc.title}</div>
-                    <div className="sidebar-item-preview">{getPreviewText(doc.content) || "Blank parchment"}</div>
-                    <div className="sidebar-item-date">{formatDate(doc.updatedAt)}</div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          )}
-        </nav>
-
-        <footer className="sidebar-footer">
-          <button className="footer-btn theme-toggle" onClick={() => setIsDarkMode(!isDarkMode)}>
-            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          <Dialog.Root open={isHelpOpen} onOpenChange={setIsHelpOpen}>
-            <Dialog.Trigger asChild>
-              <button className="footer-btn help-btn" title="Markdown Cheat Sheet">
-                <CircleHelp size={16} />
-              </button>
-            </Dialog.Trigger>
-            <Dialog.Portal>
-              <Dialog.Overlay className="DialogOverlay" />
-              <Dialog.Content className="DialogContent HelpDialogContent">
-                <Dialog.Title className="DialogTitle">Markdown Magic</Dialog.Title>
-                <Dialog.Description className="DialogDescription">
-                  Common spells to format your scrolls.
-                </Dialog.Description>
-
-                <div className="help-grid">
-                  <div className="help-item">
-                    <code># Heading 1</code>
-                    <span>Main Title</span>
-                  </div>
-                  <div className="help-item">
-                    <code>## Heading 2</code>
-                    <span>Subtitle</span>
-                  </div>
-                  <div className="help-item">
-                    <code>**Bold**</code>
-                    <span style={{ fontWeight: 'bold' }}>Bold text</span>
-                  </div>
-                  <div className="help-item">
-                    <code>*Italic*</code>
-                    <span style={{ fontStyle: 'italic' }}>Italic text</span>
-                  </div>
-                  <div className="help-item">
-                    <code>- List</code>
-                    <span>Bullet list</span>
-                  </div>
-                  <div className="help-item">
-                    <code>1. List</code>
-                    <span>Numbered list</span>
-                  </div>
-                  <div className="help-item">
-                    <code>&gt; Quote</code>
-                    <span>Blockquote</span>
-                  </div>
-                  <div className="help-item">
-                    <code>`Code`</code>
-                    <span style={{ fontFamily: 'monospace' }}>Code</span>
-                  </div>
-                </div>
-
-                <div className="DialogActions">
-                  <Dialog.Close asChild><button className="btn-modal btn-cancel">Close Grimoire</button></Dialog.Close>
-                </div>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
-
-          <Dialog.Root open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-            <Dialog.Trigger asChild>
-              <button className="footer-btn delete-btn" disabled={!activeDocId}>
-                <Trash2 size={16} />
-              </button>
-            </Dialog.Trigger>
-            <Dialog.Portal>
-              <Dialog.Overlay className="DialogOverlay" />
-              <Dialog.Content
-                className="DialogContent"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleConfirmDelete();
-                  }
-                }}
-              >
-                <div className="DialogIcon"><Wand2 size={40} /></div>
-                <Dialog.Title className="DialogTitle">Delete Note?</Dialog.Title>
-                <Dialog.Description className="DialogDescription">
-                  This spell is irreversible. Banish this scroll to the void?
-                </Dialog.Description>
-                <div className="DialogActions">
-                  <Dialog.Close asChild><button className="btn-modal btn-cancel">Cancel</button></Dialog.Close>
-                  <button className="btn-modal btn-delete" onClick={handleConfirmDelete}>Delete</button>
-                </div>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
-        </footer>
-      </aside>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggleOpen={() => setIsSidebarOpen(!isSidebarOpen)}
+        onNewNote={createNewNote}
+        documents={sortedDocs}
+        activeDocId={activeDocId}
+        onSelectDoc={setActiveDocId}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        onDeleteDoc={handleDeleteDoc}
+      />
 
       <main className="content-area">
         {!activeDoc ? (
@@ -439,45 +287,10 @@ function App() {
           </div>
         )}
 
-        {/* The Council of Mages Theme Switcher */}
-        <div className="mage-presence-container">
-          <AnimatePresence>
-            {isMageSplashOpen && (
-              <motion.div
-                className="mage-splash-overlay"
-                initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, y: 20 }}
-              >
-                {MAGE_THEMES.map((theme) => (
-                  <div
-                    key={theme.id}
-                    className={`mage-option ${mageTheme === theme.id ? "active" : ""}`}
-                    onClick={() => {
-                      setMageTheme(theme.id);
-                      setIsMageSplashOpen(false);
-                    }}
-                  >
-                    <img src={theme.icon} alt={`${theme.id} mage`} />
-                  </div>
-                ))}
-              </motion.div>
-            )}
-            <img
-              src={currentMageIcon}
-              alt="Council Logo"
-              className="editor-logo"
-              onClick={() => setIsMageSplashOpen(!isMageSplashOpen)}
-            />
-          </AnimatePresence>
-        </div>
-        {/* Click-outside overlay to close mage splash */}
-        {isMageSplashOpen && (
-          <div
-            className="mage-splash-backdrop"
-            onClick={() => setIsMageSplashOpen(false)}
-          />
-        )}
+        <MageSwitcher
+          currentTheme={mageTheme}
+          onThemeChange={setMageTheme}
+        />
       </main>
     </div>
   );
