@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as Dialog from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { Moon, Sun, SquarePen, Trash2, Wand2, PanelLeftClose } from "lucide-react";
+import { Moon, Sun, SquarePen, Trash2, Wand2, PanelLeftClose, CircleHelp } from "lucide-react";
 import Editor from "./components/Editor";
 
 // Mage Icons - Selected Council
@@ -34,6 +34,7 @@ function App() {
   const [isMageSplashOpen, setIsMageSplashOpen] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const savingRef = useRef(false);
   const saveTimeoutRef = useRef(null);
@@ -326,6 +327,62 @@ function App() {
           <button className="footer-btn theme-toggle" onClick={() => setIsDarkMode(!isDarkMode)}>
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+
+          <Dialog.Root open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+            <Dialog.Trigger asChild>
+              <button className="footer-btn help-btn" title="Markdown Cheat Sheet">
+                <CircleHelp size={16} />
+              </button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="DialogOverlay" />
+              <Dialog.Content className="DialogContent HelpDialogContent">
+                <Dialog.Title className="DialogTitle">Markdown Magic</Dialog.Title>
+                <Dialog.Description className="DialogDescription">
+                  Common spells to format your scrolls.
+                </Dialog.Description>
+
+                <div className="help-grid">
+                  <div className="help-item">
+                    <code># Heading 1</code>
+                    <span>Main Title</span>
+                  </div>
+                  <div className="help-item">
+                    <code>## Heading 2</code>
+                    <span>Subtitle</span>
+                  </div>
+                  <div className="help-item">
+                    <code>**Bold**</code>
+                    <span style={{ fontWeight: 'bold' }}>Bold text</span>
+                  </div>
+                  <div className="help-item">
+                    <code>*Italic*</code>
+                    <span style={{ fontStyle: 'italic' }}>Italic text</span>
+                  </div>
+                  <div className="help-item">
+                    <code>- List</code>
+                    <span>Bullet list</span>
+                  </div>
+                  <div className="help-item">
+                    <code>1. List</code>
+                    <span>Numbered list</span>
+                  </div>
+                  <div className="help-item">
+                    <code>&gt; Quote</code>
+                    <span>Blockquote</span>
+                  </div>
+                  <div className="help-item">
+                    <code>`Code`</code>
+                    <span style={{ fontFamily: 'monospace' }}>Code</span>
+                  </div>
+                </div>
+
+                <div className="DialogActions">
+                  <Dialog.Close asChild><button className="btn-modal btn-cancel">Close Grimoire</button></Dialog.Close>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
 
           <Dialog.Root open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <Dialog.Trigger asChild>

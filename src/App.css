@@ -623,3 +623,41 @@ button:focus {
     transform: translate(-50%, -50%) scale(1);
   }
 }
+
+/* Help Dialog Specifics */
+.HelpDialogContent {
+  max-width: 450px;
+  width: 90vw;
+  text-align: left;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+  background: var(--color-sidebar);
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.help-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.help-item code {
+  background: var(--color-hover);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: fit-content;
+  color: var(--color-accent-bg);
+}
+
+.help-item span {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
