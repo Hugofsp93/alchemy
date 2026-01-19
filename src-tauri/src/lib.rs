@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::time::UNIX_EPOCH;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -78,6 +79,8 @@ fn list_documents() -> Result<Vec<Document>, String> {
 
         if extension == "md" {
             let file_content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            let doc_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+            
             // Try parsing YAML frontmatter
             if file_content.starts_with("---") {
                 if let Some(end_idx) = file_content[3..].find("---") {
@@ -89,15 +92,38 @@ fn list_documents() -> Result<Vec<Document>, String> {
                             id: fm.id,
                             title: fm.title,
                             doc_type: fm.doc_type,
-                            content: body.trim_start().to_string(), // Remove extra initial newline
+                            content: body.trim_start().to_string(), 
                             updated_at: fm.updated_at,
                         });
                         continue;
                     }
                 }
             }
-            // Fallback for old MD without frontmatter (legacy support)
-            // We ignore them as we've handled pure MDs before.
+
+            // Fallback: Plain Markdown adoption
+            // 1. Get updated_at from file metadata
+            let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+            let updated_at = metadata.modified()
+                .unwrap_or_else(|_| std::time::SystemTime::now())
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
+            // 2. Infer Title from first line
+            let mut title = doc_id.clone();
+            if let Some(first_line) = file_content.lines().next() {
+                if first_line.starts_with("# ") {
+                    title = first_line[2..].trim().to_string();
+                }
+            }
+
+            documents.push(Document {
+                id: doc_id,
+                title,
+                doc_type: "note".to_string(),
+                content: file_content,
+                updated_at,
+            });
         }
     }
 

@@ -25,9 +25,24 @@ function Sidebar({
     if (!timestamp) return "";
     const date = new Date(timestamp);
     const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString([], { day: '2-digit', month: 'short' }).replace(".", "");
+
+    // Check if it's today by comparing date strings
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Yesterday"; // Fallback for edge cases across midnight
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 14) return "A week ago";
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 60) return "A month ago";
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+
+    return "Over a year ago";
   };
 
   const handleConfirmDelete = async () => {
@@ -98,20 +113,32 @@ function Sidebar({
 
                 <div className="help-grid">
                   <div className="help-item">
-                    <code># Heading 1</code>
-                    <span>Main Title</span>
+                    <code># Title</code>
+                    <span>Heading 1</span>
                   </div>
                   <div className="help-item">
-                    <code>## Heading 2</code>
-                    <span>Subtitle</span>
+                    <code>## Title</code>
+                    <span>Heading 2</span>
+                  </div>
+                  <div className="help-item">
+                    <code>### Title</code>
+                    <span>Heading 3</span>
+                  </div>
+                  <div className="help-item">
+                    <code>#### Title</code>
+                    <span>Heading 4</span>
                   </div>
                   <div className="help-item">
                     <code>**Bold**</code>
-                    <span style={{ fontWeight: 'bold' }}>Bold text</span>
+                    <span style={{ fontWeight: 'bold' }}>Bold</span>
                   </div>
                   <div className="help-item">
                     <code>*Italic*</code>
-                    <span style={{ fontStyle: 'italic' }}>Italic text</span>
+                    <span style={{ fontStyle: 'italic' }}>Italic</span>
+                  </div>
+                  <div className="help-item">
+                    <code>~~Strike~~</code>
+                    <span style={{ textDecoration: 'line-through' }}>Strike</span>
                   </div>
                   <div className="help-item">
                     <code>- List</code>
@@ -119,7 +146,11 @@ function Sidebar({
                   </div>
                   <div className="help-item">
                     <code>1. List</code>
-                    <span>Numbered list</span>
+                    <span>Ordered list</span>
+                  </div>
+                  <div className="help-item">
+                    <code>[ ] Task</code>
+                    <span>Checklist</span>
                   </div>
                   <div className="help-item">
                     <code>&gt; Quote</code>
@@ -127,7 +158,23 @@ function Sidebar({
                   </div>
                   <div className="help-item">
                     <code>`Code`</code>
-                    <span style={{ fontFamily: 'monospace' }}>Code</span>
+                    <span style={{ fontFamily: 'monospace' }}>Inline Code</span>
+                  </div>
+                  <div className="help-item">
+                    <code>```js</code>
+                    <span>Code Block</span>
+                  </div>
+                  <div className="help-item">
+                    <code>[Link](url)</code>
+                    <span>Link</span>
+                  </div>
+                  <div className="help-item">
+                    <code>![Alt](url)</code>
+                    <span>Image</span>
+                  </div>
+                  <div className="help-item">
+                    <code>---</code>
+                    <span>Divider</span>
                   </div>
                 </div>
 

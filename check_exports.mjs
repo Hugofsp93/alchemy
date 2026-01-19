@@ -1,0 +1,23 @@
+import * as StarterKit from '@tiptap/starter-kit';
+import * as Markdown from '@tiptap/markdown';
+import * as Placeholder from '@tiptap/extension-placeholder';
+import * as Link from '@tiptap/extension-link';
+import * as Image from '@tiptap/extension-image';
+import * as Table from '@tiptap/extension-table';
+import * as TableRow from '@tiptap/extension-table-row';
+import * as TableCell from '@tiptap/extension-table-cell';
+import * as TableHeader from '@tiptap/extension-table-header';
+import * as TaskList from '@tiptap/extension-task-list';
+import * as TaskItem from '@tiptap/extension-task-item';
+
+console.log('StarterKit:', Object.keys(StarterKit));
+console.log('Markdown:', Object.keys(Markdown));
+console.log('Placeholder:', Object.keys(Placeholder));
+console.log('Link:', Object.keys(Link));
+console.log('Image:', Object.keys(Image));
+console.log('Table:', Object.keys(Table));
+console.log('TableRow:', Object.keys(TableRow));
+console.log('TableCell:', Object.keys(TableCell));
+console.log('TableHeader:', Object.keys(TableHeader));
+console.log('TaskList:', Object.keys(TaskList));
+console.log('TaskItem:', Object.keys(TaskItem));
