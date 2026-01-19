@@ -38,11 +38,108 @@ fn ensure_notes_dir() -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+const SHOWCASE_CONTENT: &str = r#"---
+id: welcome-showcase
+title: "Alchemy Feature Showcase 🧪"
+type: note
+updatedAt: 1737300000000
+---
+# Alchemy Feature Showcase 🧪
+
+This note demonstrates all the supported Markdown features in **Alchemy**.
+
+## Typography
+
+You can use **bold text**, *italic text*, and ~~strikethrough~~.  
+Styles can be combined: ***bold and italic***.
+
+---
+
+## Headings
+
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+
+---
+
+## Lists
+
+### Unordered
+- Item 1
+- Item 2
+  - Subitem A
+  - Subitem B
+
+### Ordered
+1. First Step
+2. Second Step
+3. Third Step
+
+### Task List
+- [x] Install Alchemy
+- [x] Configure Editor extensions
+- [ ] Write my first masterpiece
+- [ ] Share with the world
+
+---
+
+## Code
+Inline code looks like `const a = 1;`.
+
+**JavaScript:**
+```javascript
+function alchemy() {
+  const magic = true;
+  return magic ? "Success" : "Try again";
+}
+```
+
+**Rust:**
+```rust
+fn main() {
+    println!("Hello from the backend!");
+}
+```
+
+---
+
+## Tables
+
+| Component  | Status    | Priority |
+| ---------- | --------- | -------- |
+| Editor     | ✅ Ready   | High     |
+| Sidebar    | ✅ Ready   | Medium   |
+| Cloud Sync | ⏳ Pending | Low      |
+
+---
+
+## Quotes
+> "Any sufficiently advanced technology is indistinguishable from magic."  
+> — Arthur C. Clarke
+
+## Links & Images
+[Alchemy Repository](https://github.com/tauri-apps/tauri)
+
+![Random Unsplash Image](https://images.unsplash.com/photo-1550684848-fac1c5b4e853?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60)
+"#;
+
 #[tauri::command]
 fn list_documents() -> Result<Vec<Document>, String> {
     let notes_dir = ensure_notes_dir().map_err(|e| e.to_string())?;
-    let mut documents = Vec::new();
 
+    // Check if empty for seeding
+    let entries_count = fs::read_dir(&notes_dir)
+        .map_err(|e| e.to_string())?
+        .count();
+
+    if entries_count == 0 {
+        let showcase_path = notes_dir.join("welcome-showcase.md");
+        fs::write(showcase_path, SHOWCASE_CONTENT).map_err(|e| e.to_string())?;
+    }
+
+    let mut documents = Vec::new();
     let entries = fs::read_dir(&notes_dir).map_err(|e| e.to_string())?;
 
     for entry in entries {
