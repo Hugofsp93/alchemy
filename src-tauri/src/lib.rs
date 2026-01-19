@@ -71,8 +71,8 @@ fn list_documents() -> Result<Vec<Document>, String> {
                     }
 
                     // Add to valid documents list
-                    documents.push(doc); 
-                    continue; 
+                    documents.push(doc);
+                    continue;
                 }
             }
         }
@@ -80,7 +80,7 @@ fn list_documents() -> Result<Vec<Document>, String> {
         if extension == "md" {
             let file_content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
             let doc_id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-            
+
             // Try parsing YAML frontmatter
             if file_content.starts_with("---") {
                 if let Some(end_idx) = file_content[3..].find("---") {
@@ -92,7 +92,7 @@ fn list_documents() -> Result<Vec<Document>, String> {
                             id: fm.id,
                             title: fm.title,
                             doc_type: fm.doc_type,
-                            content: body.trim_start().to_string(), 
+                            content: body.trim_start().to_string(),
                             updated_at: fm.updated_at,
                         });
                         continue;
