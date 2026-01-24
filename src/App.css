@@ -49,6 +49,7 @@
   --color-border: #3a3a3a;
   --color-hover: #333333;
   --color-active: #404040;
+  --color-danger: #e53935;
 }
 
 /* ===========================
@@ -360,7 +361,7 @@ button:focus {
 }
 
 .delete-btn:hover:not(:disabled) {
-  color: #e53935;
+  color: var(--color-danger);
   /* Soft red for deletion */
 }
 
@@ -838,4 +839,21 @@ button:focus {
 .help-item span {
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+/* Utility classes for Help Dialog */
+.u-bold {
+  font-weight: bold;
+}
+
+.u-italic {
+  font-style: italic;
+}
+
+.u-strike {
+  text-decoration: line-through;
+}
+
+.u-mono {
+  font-family: var(--font-mono);
 }

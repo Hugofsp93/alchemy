@@ -7,10 +7,10 @@ import mageOrange from "../assets/mage_orange.png";
 import mageDarkGray from "../assets/mage_dark_gray.png";
 
 const MAGE_THEMES = [
-  { id: "purple", icon: magePurple, color: "#64448b" },
-  { id: "red", icon: mageRed, color: "#e53935" },
-  { id: "orange", icon: mageOrange, color: "#f57c00" },
-  { id: "dark_gray", icon: mageDarkGray, color: "#455a64" },
+  { id: "purple", icon: magePurple },
+  { id: "red", icon: mageRed },
+  { id: "orange", icon: mageOrange },
+  { id: "dark_gray", icon: mageDarkGray },
 ];
 
 function MageSwitcher({ currentTheme, onThemeChange }) {

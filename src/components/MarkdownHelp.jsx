@@ -39,15 +39,15 @@ function MarkdownHelp() {
             </div>
             <div className="help-item">
               <code>**Bold**</code>
-              <span style={{ fontWeight: 'bold' }}>Bold</span>
+              <span className="u-bold">Bold</span>
             </div>
             <div className="help-item">
               <code>*Italic*</code>
-              <span style={{ fontStyle: 'italic' }}>Italic</span>
+              <span className="u-italic">Italic</span>
             </div>
             <div className="help-item">
               <code>~~Strike~~</code>
-              <span style={{ textDecoration: 'line-through' }}>Strike</span>
+              <span className="u-strike">Strike</span>
             </div>
             <div className="help-item">
               <code>- List</code>
@@ -67,7 +67,7 @@ function MarkdownHelp() {
             </div>
             <div className="help-item">
               <code>`Code`</code>
-              <span style={{ fontFamily: 'monospace' }}>Inline Code</span>
+              <span className="u-mono">Inline Code</span>
             </div>
             <div className="help-item">
               <code>```js</code>

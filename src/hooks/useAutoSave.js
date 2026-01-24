@@ -53,7 +53,9 @@ export function useAutoSave(documentsRef, setDocuments, setActiveDocId) {
           if (isExitingRef.current) return;
           isExitingRef.current = true;
 
-          console.log("⚠️ CLOSE DETECTED: Starting direct DOM flush...");
+          if (import.meta.env.DEV) {
+            console.log("⚠️ CLOSE DETECTED: Starting direct DOM flush...");
+          }
 
           (async () => {
             if (currentDocRef.current) {
@@ -68,11 +70,15 @@ export function useAutoSave(documentsRef, setDocuments, setActiveDocId) {
                 updatedAt: Date.now()
               };
 
-              console.log("💾 Writing final data to disk...");
+              if (import.meta.env.DEV) {
+                console.log("💾 Writing final data to disk...");
+              }
               try {
                 if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
                 await invoke("save_document", { oldId: flushDoc.id, doc: flushDoc });
-                console.log("✅ Flush complete. Exiting app.");
+                if (import.meta.env.DEV) {
+                  console.log("✅ Flush complete. Exiting app.");
+                }
               } catch (e) {
                 console.error("❌ Fatal error in final flush:", e);
               }
