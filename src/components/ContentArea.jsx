@@ -1,5 +1,6 @@
 import Editor from "./Editor";
 import MageSwitcher from "./MageSwitcher";
+import CopyNoteButton from "./CopyNoteButton";
 
 function ContentArea({
   activeDoc,
@@ -35,6 +36,10 @@ function ContentArea({
           />
         </div>
       )}
+
+      <div className="content-bottom-controls">
+        <CopyNoteButton activeDoc={activeDoc} />
+      </div>
 
       <MageSwitcher
         currentTheme={mageTheme}
