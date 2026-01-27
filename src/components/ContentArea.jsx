@@ -1,6 +1,7 @@
 import Editor from "./Editor";
 import MageSwitcher from "./MageSwitcher";
 import CopyNoteButton from "./CopyNoteButton";
+import MarqueeTitle from "./MarqueeTitle";
 
 function ContentArea({
   activeDoc,
@@ -20,9 +21,8 @@ function ContentArea({
       ) : (
         <div className="editor-container">
           <div className="content-drag-region" data-tauri-drag-region />
-          <input
+          <MarqueeTitle
             ref={titleInputRef}
-            className="editor-title"
             value={activeDoc.title}
             onChange={(e) => updateDocument(activeDocId, { title: e.target.value })}
             placeholder="Title"

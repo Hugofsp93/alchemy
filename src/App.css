@@ -388,27 +388,98 @@ button:focus {
   width: 100%;
 }
 
-.editor-title {
+.editor-title,
+.editor-title-container {
   position: absolute;
   top: 24px;
   right: 24px;
-  border: none;
-  background: transparent;
+  max-width: 280px;
+  z-index: 5;
   font-size: 20px;
   font-weight: 500;
   color: var(--color-accent-bg);
+  border: none;
+  background: transparent;
   outline: none;
+  padding: 0;
+  margin: 0;
   text-align: right;
+  height: 27px;
+}
+
+input.editor-title {
   width: auto;
   min-width: 150px;
   opacity: 0.5;
   transition: opacity 0.2s;
-  z-index: 5;
+  cursor: text;
 }
 
-.editor-title:focus,
-.editor-title:hover {
+input.editor-title:focus,
+input.editor-title:hover {
   opacity: 1;
+}
+
+input.editor-title.editing {
+  display: block;
+  opacity: 1;
+  background: var(--color-bg);
+  width: 100%;
+}
+
+.editor-title-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: text;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.editor-title-container:hover {
+  opacity: 1;
+}
+
+.editor-title-marquee-wrapper {
+  display: inline-flex;
+}
+
+.editor-title-container.overflowing {
+  justify-content: flex-start;
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+.editor-title-container.overflowing .editor-title-marquee-wrapper {
+  padding-left: 100%;
+  animation: marquee 10s linear infinite;
+}
+
+.editor-title-container.overflowing .editor-title-marquee-wrapper {
+  padding-left: 0;
+}
+
+.editor-title-text {
+  padding-left: 50px;
+}
+
+.editor-title-text:first-child {
+  padding-left: 0;
+}
+
+.editor-title-container.overflowing:hover .editor-title-marquee-wrapper {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 /* TipTap Editor */
